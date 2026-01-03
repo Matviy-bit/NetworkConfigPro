@@ -71,10 +71,14 @@ netconfigpro/
 │   │   ├── models.py    # Data models
 │   │   ├── generators/  # Config generation
 │   │   ├── validators/  # Validation rules
-│   │   └── parsers/     # Config parsing
+│   │   ├── parsers/     # Config parsing
+│   │   └── templates/   # Vendor-specific templates
 │   ├── security/        # Encryption, vault
-│   └── gui/             # CustomTkinter GUI
-└── tests/               # Test suite
+│   ├── gui/             # CustomTkinter GUI
+│   └── utils/           # Utility functions
+├── tests/               # Test suite
+├── data/                # Application data
+└── docs/                # Documentation
 ```
 
 ## Running Tests
