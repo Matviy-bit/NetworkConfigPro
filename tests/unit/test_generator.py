@@ -52,6 +52,7 @@ class TestConfigGenerator:
         assert Vendor.CISCO_NXOS in vendors
         assert Vendor.ARISTA_EOS in vendors
         assert Vendor.JUNIPER_JUNOS in vendors
+        assert Vendor.SONIC in vendors
 
     def test_generate_basic_cisco_ios(self, generator, basic_config):
         """Test generating basic Cisco IOS config."""

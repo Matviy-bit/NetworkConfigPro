@@ -17,6 +17,7 @@ class ConfigGenerator:
         Vendor.CISCO_NXOS: "cisco_nxos.j2",
         Vendor.ARISTA_EOS: "arista_eos.j2",
         Vendor.JUNIPER_JUNOS: "juniper_junos.j2",
+        Vendor.SONIC: "sonic.j2",
     }
 
     def __init__(self):
@@ -34,6 +35,9 @@ class ConfigGenerator:
         """Register custom Jinja2 filters."""
         self.env.filters["cidr_prefix"] = self._subnet_to_cidr
         self.env.filters["junos_interface_name"] = self._junos_interface_name
+        self.env.filters["sonic_interface_name"] = self._sonic_interface_name
+        self.env.filters["sonic_vlan_id"] = self._sonic_vlan_id
+        self.env.filters["wildcard_to_cidr"] = self._wildcard_to_cidr
 
     @staticmethod
     def _subnet_to_cidr(subnet_mask: str) -> int:
@@ -104,6 +108,113 @@ class ConfigGenerator:
                 return f"{new}{remainder}"
 
         return name
+
+    @staticmethod
+    def _sonic_interface_name(name: str) -> str:
+        """Convert interface name to SONiC format.
+
+        Args:
+            name: Interface name (e.g., "GigabitEthernet0/0", "Ethernet1")
+
+        Returns:
+            SONiC-style interface name (e.g., "Ethernet0", "Ethernet1")
+        """
+        name_lower = name.lower()
+
+        # SONiC uses simple Ethernet numbering
+        # Common conversions
+        conversions = [
+            ("hundredgigabitethernet", "Ethernet"),
+            ("fortygigabitethernet", "Ethernet"),
+            ("tengigabitethernet", "Ethernet"),
+            ("gigabitethernet", "Ethernet"),
+            ("fastethernet", "Ethernet"),
+            ("loopback", "Loopback"),
+            ("port-channel", "PortChannel"),
+            ("portchannel", "PortChannel"),
+            ("vlan", "Vlan"),
+            ("management", "eth"),
+            ("mgmt", "eth"),
+        ]
+
+        for old, new in conversions:
+            if old in name_lower:
+                # Extract the interface numbers
+                remainder = name_lower.replace(old, "").strip()
+                # Convert slot/port format to flat numbering for SONiC
+                if "/" in remainder:
+                    parts = remainder.split("/")
+                    # SONiC typically uses flat numbering: Ethernet0, Ethernet4, etc.
+                    # For slot/port, we'll compute: slot * 48 + port (common pattern)
+                    try:
+                        if len(parts) == 2:
+                            flat_num = int(parts[0]) * 48 + int(parts[1])
+                        elif len(parts) == 3:
+                            flat_num = int(parts[0]) * 48 + int(parts[1]) * 4 + int(parts[2])
+                        else:
+                            flat_num = int(parts[-1])
+                        if new == "PortChannel":
+                            return f"{new}{flat_num:04d}"
+                        return f"{new}{flat_num}"
+                    except ValueError:
+                        return f"{new}{remainder.replace('/', '')}"
+                else:
+                    try:
+                        num = int(remainder)
+                        if new == "PortChannel":
+                            return f"{new}{num:04d}"
+                        return f"{new}{num}"
+                    except ValueError:
+                        return f"{new}{remainder}"
+
+        # Check if it's already in SONiC format
+        if name.startswith("Ethernet") or name.startswith("Loopback") or \
+           name.startswith("PortChannel") or name.startswith("Vlan"):
+            return name
+
+        return name
+
+    @staticmethod
+    def _sonic_vlan_id(name: str) -> str:
+        """Extract VLAN ID from interface name.
+
+        Args:
+            name: VLAN interface name (e.g., "Vlan100", "vlan100", "100")
+
+        Returns:
+            VLAN ID as string
+        """
+        import re
+        # Extract numeric portion
+        match = re.search(r"(\d+)", str(name))
+        if match:
+            return match.group(1)
+        return name
+
+    @staticmethod
+    def _wildcard_to_cidr(wildcard: str) -> int:
+        """Convert wildcard mask to CIDR prefix length.
+
+        Args:
+            wildcard: Wildcard mask (e.g., "0.0.0.255")
+
+        Returns:
+            CIDR prefix length (e.g., 24)
+        """
+        if not wildcard or wildcard == "0.0.0.0":
+            return 32
+
+        try:
+            octets = wildcard.split(".")
+            if len(octets) == 4:
+                # Invert wildcard to get subnet mask
+                mask_octets = [255 - int(o) for o in octets]
+                binary = "".join(format(octet, "08b") for octet in mask_octets)
+                return binary.count("1")
+        except (ValueError, AttributeError):
+            pass
+
+        return 32
 
     def generate(self, config: DeviceConfig) -> str:
         """Generate configuration from a DeviceConfig object.

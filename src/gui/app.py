@@ -71,6 +71,7 @@ class NetConfigProApp(QMainWindow):
         "Cisco NX-OS": Vendor.CISCO_NXOS,
         "Arista EOS": Vendor.ARISTA_EOS,
         "Juniper Junos": Vendor.JUNIPER_JUNOS,
+        "SONiC": Vendor.SONIC,
     }
 
     # Interface type options for dropdown
@@ -214,6 +215,28 @@ class NetConfigProApp(QMainWindow):
             "ospf": {"process_id": "1", "router_id": "", "ref_bandwidth": "100000", "networks": "", "passive_interfaces": ""},
             "bgp": {"local_as": "65000", "router_id": "", "neighbors": [], "networks": ""},
         },
+        "SONiC ToR Switch": {
+            "basic": {
+                "vendor": "SONiC",
+                "hostname": "sonic-tor",
+                "domain": "dc.example.com",
+                "enable_secret": "",
+                "dns_servers": "8.8.8.8, 8.8.4.4",
+                "ntp_servers": "pool.ntp.org",
+            },
+            "interfaces": [
+                {"type": "Ethernet", "number": "0", "description": "Uplink-1", "ip": "", "mask": "255.255.255.252"},
+                {"type": "Ethernet", "number": "4", "description": "Uplink-2", "ip": "", "mask": "255.255.255.252"},
+                {"type": "Ethernet", "number": "8", "description": "Server-1", "ip": "", "mask": ""},
+                {"type": "Ethernet", "number": "12", "description": "Server-2", "ip": "", "mask": ""},
+                {"type": "Loopback", "number": "0", "description": "Router ID", "ip": "", "mask": "255.255.255.255"},
+            ],
+            "vlans": "1000,SERVERS\n2000,MANAGEMENT",
+            "acl": {"name": "", "type": "Extended", "entries": []},
+            "static_routes": "",
+            "ospf": {"process_id": "", "router_id": "", "ref_bandwidth": "", "networks": "", "passive_interfaces": ""},
+            "bgp": {"local_as": "65100", "router_id": "", "neighbors": [], "networks": ""},
+        },
     }
 
     INTERFACE_PREFIXES = {
@@ -260,6 +283,17 @@ class NetConfigProApp(QMainWindow):
             "VLAN": "irb.",
             "Port-Channel": "ae",
             "Management": "em",
+        },
+        Vendor.SONIC: {
+            "GigabitEthernet": "Ethernet",
+            "TenGigabitEthernet": "Ethernet",
+            "FortyGigabitEthernet": "Ethernet",
+            "HundredGigabitEthernet": "Ethernet",
+            "Ethernet": "Ethernet",
+            "Loopback": "Loopback",
+            "VLAN": "Vlan",
+            "Port-Channel": "PortChannel",
+            "Management": "eth",
         },
     }
 

@@ -1,5 +1,6 @@
 """Parser for importing existing network configurations."""
 
+import json
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ from ..models import (
     OSPFConfig,
     OSPFNetwork,
     StaticRoute,
+    SwitchportMode,
     Vendor,
     VLAN,
 )
@@ -991,11 +993,459 @@ class JuniperJunosParser(BaseConfigParser):
         return f"{(mask >> 24) & 0xFF}.{(mask >> 16) & 0xFF}.{(mask >> 8) & 0xFF}.{mask & 0xFF}"
 
 
+class SONiCParser(BaseConfigParser):
+    """Parser for SONiC config_db.json configurations."""
+
+    def detect_vendor(self, config_text: str) -> bool:
+        """Detect if config is SONiC JSON format."""
+        # Try to parse as JSON and look for SONiC-specific tables
+        try:
+            data = json.loads(config_text)
+            sonic_tables = [
+                "DEVICE_METADATA",
+                "PORT",
+                "INTERFACE",
+                "VLAN",
+                "BGP_NEIGHBOR",
+                "LOOPBACK_INTERFACE",
+            ]
+            # Check if any SONiC-specific tables exist
+            return any(table in data for table in sonic_tables)
+        except (json.JSONDecodeError, TypeError):
+            return False
+
+    def parse(self, config_text: str) -> ParseResult:
+        """Parse SONiC config_db.json configuration."""
+        errors = []
+        warnings = []
+
+        config = DeviceConfig(
+            hostname="",
+            vendor=Vendor.SONIC,
+        )
+
+        try:
+            data = json.loads(config_text)
+
+            # Parse DEVICE_METADATA
+            self._parse_device_metadata(data, config, warnings)
+
+            # Parse interfaces (PORT, INTERFACE, LOOPBACK_INTERFACE)
+            config.interfaces = self._parse_interfaces(data)
+
+            # Parse VLANs
+            config.vlans = self._parse_vlans(data)
+
+            # Parse VLAN members and update interfaces
+            self._parse_vlan_members(data, config)
+
+            # Parse BGP
+            config.bgp = self._parse_bgp(data)
+
+            # Parse static routes
+            config.static_routes = self._parse_static_routes(data)
+
+            # Parse ACLs
+            config.acls = self._parse_acls(data)
+
+            # Parse NTP servers
+            config.ntp_servers = self._parse_ntp_servers(data)
+
+            # Parse DNS servers
+            config.dns_servers = self._parse_dns_servers(data)
+
+        except json.JSONDecodeError as e:
+            errors.append(f"Invalid JSON: {str(e)}")
+        except Exception as e:
+            errors.append(f"Parse error: {str(e)}")
+
+        return ParseResult(
+            config=config if not errors else None,
+            vendor=Vendor.SONIC,
+            errors=errors,
+            warnings=warnings,
+        )
+
+    def _parse_device_metadata(self, data: dict, config: DeviceConfig, warnings: list) -> None:
+        """Parse DEVICE_METADATA table."""
+        metadata = data.get("DEVICE_METADATA", {}).get("localhost", {})
+
+        if "hostname" in metadata:
+            config.hostname = metadata["hostname"]
+        else:
+            warnings.append("No hostname found in DEVICE_METADATA")
+
+        # BGP ASN is often stored in metadata
+        if "bgp_asn" in metadata:
+            try:
+                asn = int(metadata["bgp_asn"])
+                if config.bgp is None:
+                    config.bgp = BGPConfig(local_as=asn)
+                else:
+                    config.bgp.local_as = asn
+            except ValueError:
+                pass
+
+    def _parse_interfaces(self, data: dict) -> list[Interface]:
+        """Parse PORT, INTERFACE, LOOPBACK_INTERFACE tables."""
+        interfaces = []
+        processed_names = set()
+
+        # Parse PORT table (physical interfaces)
+        ports = data.get("PORT", {})
+        for port_name, port_config in ports.items():
+            iface = Interface(
+                name=port_name,
+                interface_type=self._detect_interface_type(port_name),
+                enabled=port_config.get("admin_status", "up") == "up",
+                description=port_config.get("description", ""),
+            )
+
+            # MTU
+            if "mtu" in port_config:
+                try:
+                    iface.mtu = int(port_config["mtu"])
+                except ValueError:
+                    pass
+
+            # Speed
+            if "speed" in port_config:
+                iface.speed = port_config["speed"]
+
+            interfaces.append(iface)
+            processed_names.add(port_name)
+
+        # Parse INTERFACE table (L3 addresses on physical interfaces)
+        interface_table = data.get("INTERFACE", {})
+        for key in interface_table.keys():
+            if "|" in key:
+                iface_name, ip_prefix = key.split("|", 1)
+                # Find existing interface or create new one
+                existing = next((i for i in interfaces if i.name == iface_name), None)
+                if existing:
+                    # Parse IP/prefix
+                    if "/" in ip_prefix:
+                        ip, prefix = ip_prefix.split("/")
+                        existing.ip_address = ip
+                        existing.subnet_mask = self._cidr_to_netmask(int(prefix))
+                elif iface_name not in processed_names:
+                    # Create new interface
+                    if "/" in ip_prefix:
+                        ip, prefix = ip_prefix.split("/")
+                        iface = Interface(
+                            name=iface_name,
+                            interface_type=self._detect_interface_type(iface_name),
+                            ip_address=ip,
+                            subnet_mask=self._cidr_to_netmask(int(prefix)),
+                        )
+                        interfaces.append(iface)
+                        processed_names.add(iface_name)
+
+        # Parse LOOPBACK_INTERFACE table
+        loopback_table = data.get("LOOPBACK_INTERFACE", {})
+        for key in loopback_table.keys():
+            if "|" in key:
+                iface_name, ip_prefix = key.split("|", 1)
+                if iface_name not in processed_names:
+                    if "/" in ip_prefix:
+                        ip, prefix = ip_prefix.split("/")
+                        iface = Interface(
+                            name=iface_name,
+                            interface_type=InterfaceType.LOOPBACK,
+                            ip_address=ip,
+                            subnet_mask=self._cidr_to_netmask(int(prefix)),
+                        )
+                        interfaces.append(iface)
+                        processed_names.add(iface_name)
+
+        # Parse VLAN_INTERFACE table
+        vlan_iface_table = data.get("VLAN_INTERFACE", {})
+        for key in vlan_iface_table.keys():
+            if "|" in key:
+                iface_name, ip_prefix = key.split("|", 1)
+                if iface_name not in processed_names:
+                    if "/" in ip_prefix:
+                        ip, prefix = ip_prefix.split("/")
+                        iface = Interface(
+                            name=iface_name,
+                            interface_type=InterfaceType.VLAN,
+                            ip_address=ip,
+                            subnet_mask=self._cidr_to_netmask(int(prefix)),
+                        )
+                        interfaces.append(iface)
+                        processed_names.add(iface_name)
+
+        # Parse PORTCHANNEL table
+        portchannel_table = data.get("PORTCHANNEL", {})
+        for pc_name, pc_config in portchannel_table.items():
+            if pc_name not in processed_names:
+                iface = Interface(
+                    name=pc_name,
+                    interface_type=InterfaceType.PORT_CHANNEL,
+                    enabled=pc_config.get("admin_status", "up") == "up",
+                )
+                if "mtu" in pc_config:
+                    try:
+                        iface.mtu = int(pc_config["mtu"])
+                    except ValueError:
+                        pass
+                interfaces.append(iface)
+                processed_names.add(pc_name)
+
+        # Parse PORTCHANNEL_INTERFACE table for IPs
+        pc_iface_table = data.get("PORTCHANNEL_INTERFACE", {})
+        for key in pc_iface_table.keys():
+            if "|" in key:
+                iface_name, ip_prefix = key.split("|", 1)
+                existing = next((i for i in interfaces if i.name == iface_name), None)
+                if existing and "/" in ip_prefix:
+                    ip, prefix = ip_prefix.split("/")
+                    existing.ip_address = ip
+                    existing.subnet_mask = self._cidr_to_netmask(int(prefix))
+
+        return interfaces
+
+    def _parse_vlans(self, data: dict) -> list[VLAN]:
+        """Parse VLAN table."""
+        vlans = []
+        vlan_table = data.get("VLAN", {})
+
+        for vlan_name, vlan_config in vlan_table.items():
+            # Extract VLAN ID from name (e.g., "Vlan1000" -> 1000)
+            vlan_id_match = re.search(r"(\d+)", vlan_name)
+            if vlan_id_match:
+                vlan_id = int(vlan_id_match.group(1))
+            elif "vlanid" in vlan_config:
+                vlan_id = int(vlan_config["vlanid"])
+            else:
+                continue
+
+            vlans.append(VLAN(
+                vlan_id=vlan_id,
+                name=vlan_name,
+            ))
+
+        return vlans
+
+    def _parse_vlan_members(self, data: dict, config: DeviceConfig) -> None:
+        """Parse VLAN_MEMBER table and update interfaces."""
+        vlan_member_table = data.get("VLAN_MEMBER", {})
+
+        for key, member_config in vlan_member_table.items():
+            if "|" in key:
+                vlan_name, iface_name = key.split("|", 1)
+                tagging_mode = member_config.get("tagging_mode", "untagged")
+
+                # Extract VLAN ID
+                vlan_id_match = re.search(r"(\d+)", vlan_name)
+                if not vlan_id_match:
+                    continue
+                vlan_id = int(vlan_id_match.group(1))
+
+                # Find the interface
+                existing = next((i for i in config.interfaces if i.name == iface_name), None)
+                if existing:
+                    if tagging_mode == "untagged":
+                        existing.vlan_id = vlan_id
+                        existing.switchport_mode = SwitchportMode.ACCESS
+                    elif tagging_mode == "tagged":
+                        existing.is_trunk = True
+                        existing.switchport_mode = SwitchportMode.TRUNK
+                        if existing.trunk_allowed_vlans:
+                            existing.trunk_allowed_vlans += f",{vlan_id}"
+                        else:
+                            existing.trunk_allowed_vlans = str(vlan_id)
+
+    def _parse_bgp(self, data: dict) -> Optional[BGPConfig]:
+        """Parse BGP_NEIGHBOR table."""
+        neighbor_table = data.get("BGP_NEIGHBOR", {})
+        if not neighbor_table:
+            return None
+
+        # Get ASN from DEVICE_METADATA if available
+        metadata = data.get("DEVICE_METADATA", {}).get("localhost", {})
+        local_as = 65000  # Default
+        if "bgp_asn" in metadata:
+            try:
+                local_as = int(metadata["bgp_asn"])
+            except ValueError:
+                pass
+
+        bgp = BGPConfig(local_as=local_as)
+
+        for neighbor_ip, neighbor_config in neighbor_table.items():
+            # Skip IPv6 neighbors for now
+            if ":" in neighbor_ip:
+                continue
+
+            try:
+                remote_as = int(neighbor_config.get("asn", 0))
+            except ValueError:
+                continue
+
+            neighbor = BGPNeighbor(
+                ip_address=neighbor_ip,
+                remote_as=remote_as,
+                description=neighbor_config.get("name", ""),
+            )
+
+            # Update source (local_addr in SONiC)
+            if "local_addr" in neighbor_config:
+                neighbor.update_source = neighbor_config["local_addr"]
+
+            bgp.neighbors.append(neighbor)
+
+        return bgp if bgp.neighbors else None
+
+    def _parse_static_routes(self, data: dict) -> list[StaticRoute]:
+        """Parse STATIC_ROUTE table."""
+        routes = []
+        route_table = data.get("STATIC_ROUTE", {})
+
+        for prefix, route_config in route_table.items():
+            if "/" in prefix:
+                dest, cidr = prefix.split("/")
+                mask = self._cidr_to_netmask(int(cidr))
+                next_hop = route_config.get("nexthop", "")
+
+                if next_hop:
+                    route = StaticRoute(
+                        destination=dest,
+                        mask=mask,
+                        next_hop=next_hop,
+                    )
+
+                    # Admin distance
+                    if "distance" in route_config:
+                        try:
+                            route.admin_distance = int(route_config["distance"])
+                        except ValueError:
+                            pass
+
+                    routes.append(route)
+
+        return routes
+
+    def _parse_acls(self, data: dict) -> list[ACL]:
+        """Parse ACL_TABLE and ACL_RULE tables."""
+        acls = []
+        acl_table = data.get("ACL_TABLE", {})
+        acl_rule_table = data.get("ACL_RULE", {})
+
+        for acl_name, acl_config in acl_table.items():
+            acl = ACL(
+                name=acl_name,
+                is_extended=acl_config.get("type", "L3") == "L3",
+            )
+
+            # Find rules for this ACL
+            for rule_key, rule_config in acl_rule_table.items():
+                if rule_key.startswith(f"{acl_name}|"):
+                    # Extract sequence from rule name
+                    seq_match = re.search(r"RULE_(\d+)", rule_key)
+                    sequence = int(seq_match.group(1)) if seq_match else 10
+
+                    # Determine action
+                    packet_action = rule_config.get("PACKET_ACTION", "DROP")
+                    action = ACLAction.PERMIT if packet_action in ("FORWARD", "ACCEPT") else ACLAction.DENY
+
+                    # Determine protocol
+                    ip_protocol = rule_config.get("IP_PROTOCOL", "")
+                    if ip_protocol == "6":
+                        protocol = ACLProtocol.TCP
+                    elif ip_protocol == "17":
+                        protocol = ACLProtocol.UDP
+                    elif ip_protocol == "1":
+                        protocol = ACLProtocol.ICMP
+                    else:
+                        protocol = ACLProtocol.IP
+
+                    # Source
+                    src_ip = rule_config.get("SRC_IP", "any")
+                    if "/" in src_ip:
+                        source, src_prefix = src_ip.split("/")
+                        source_wildcard = self._cidr_to_wildcard(int(src_prefix))
+                    else:
+                        source = src_ip
+                        source_wildcard = "0.0.0.0"
+
+                    # Destination
+                    dst_ip = rule_config.get("DST_IP", "any")
+                    if "/" in dst_ip:
+                        destination, dst_prefix = dst_ip.split("/")
+                        destination_wildcard = self._cidr_to_wildcard(int(dst_prefix))
+                    else:
+                        destination = dst_ip
+                        destination_wildcard = "0.0.0.0"
+
+                    entry = ACLEntry(
+                        sequence=sequence,
+                        action=action,
+                        protocol=protocol,
+                        source=source,
+                        source_wildcard=source_wildcard,
+                        destination=destination,
+                        destination_wildcard=destination_wildcard,
+                        source_port=rule_config.get("L4_SRC_PORT"),
+                        destination_port=rule_config.get("L4_DST_PORT"),
+                    )
+                    acl.entries.append(entry)
+
+            # Sort entries by sequence
+            acl.entries.sort(key=lambda e: e.sequence)
+            acls.append(acl)
+
+        return acls
+
+    def _parse_ntp_servers(self, data: dict) -> list[str]:
+        """Parse NTP_SERVER table."""
+        ntp_table = data.get("NTP_SERVER", {})
+        return list(ntp_table.keys())
+
+    def _parse_dns_servers(self, data: dict) -> list[str]:
+        """Parse DNS_NAMESERVER table."""
+        dns_table = data.get("DNS_NAMESERVER", {})
+        return list(dns_table.keys())
+
+    def _detect_interface_type(self, name: str) -> InterfaceType:
+        """Detect interface type from SONiC name."""
+        name_lower = name.lower()
+        if name_lower.startswith("ethernet"):
+            return InterfaceType.ETHERNET
+        elif name_lower.startswith("loopback"):
+            return InterfaceType.LOOPBACK
+        elif name_lower.startswith("portchannel"):
+            return InterfaceType.PORT_CHANNEL
+        elif name_lower.startswith("vlan"):
+            return InterfaceType.VLAN
+        elif name_lower.startswith("eth") or name_lower.startswith("mgmt"):
+            return InterfaceType.MGMT
+        else:
+            return InterfaceType.ETHERNET
+
+    @staticmethod
+    def _cidr_to_netmask(prefix: int) -> str:
+        """Convert CIDR prefix to dotted decimal netmask."""
+        if prefix < 0 or prefix > 32:
+            return "255.255.255.255"
+        mask = (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF
+        return f"{(mask >> 24) & 0xFF}.{(mask >> 16) & 0xFF}.{(mask >> 8) & 0xFF}.{mask & 0xFF}"
+
+    @staticmethod
+    def _cidr_to_wildcard(prefix: int) -> str:
+        """Convert CIDR prefix to wildcard mask."""
+        if prefix < 0 or prefix > 32:
+            return "0.0.0.0"
+        wildcard = (0xFFFFFFFF >> prefix) & 0xFFFFFFFF
+        return f"{(wildcard >> 24) & 0xFF}.{(wildcard >> 16) & 0xFF}.{(wildcard >> 8) & 0xFF}.{wildcard & 0xFF}"
+
+
 class ConfigParserFactory:
     """Factory for creating appropriate config parsers."""
 
     _parsers = [
-        JuniperJunosParser,  # Check Junos first (more specific patterns)
+        SONiCParser,  # Check SONiC first (JSON format is very specific)
+        JuniperJunosParser,  # Check Junos second (more specific patterns)
         CiscoIOSParser,
     ]
 
@@ -1037,6 +1487,7 @@ class ConfigParserFactory:
             Vendor.CISCO_NXOS: CiscoIOSParser,  # Similar enough for basic parsing
             Vendor.ARISTA_EOS: CiscoIOSParser,  # Arista uses similar syntax
             Vendor.JUNIPER_JUNOS: JuniperJunosParser,
+            Vendor.SONIC: SONiCParser,
         }
 
         parser_class = parser_map.get(vendor)

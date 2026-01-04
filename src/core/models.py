@@ -11,6 +11,7 @@ class Vendor(Enum):
     CISCO_NXOS = "cisco_nxos"
     ARISTA_EOS = "arista_eos"
     JUNIPER_JUNOS = "juniper_junos"
+    SONIC = "sonic"
 
 
 class InterfaceType(Enum):
