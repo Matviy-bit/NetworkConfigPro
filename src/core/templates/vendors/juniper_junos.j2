@@ -129,14 +129,22 @@ protocols {
 {% if ospf.reference_bandwidth != 100 %}
         reference-bandwidth {{ ospf.reference_bandwidth }}m;
 {% endif %}
+{# Group interfaces by area for proper Junos syntax #}
+{% set areas_seen = [] %}
 {% for network in ospf.networks %}
-        area {{ network.area }} {
-            interface {{ network.network }} {
-{% if network.network in ospf.passive_interfaces %}
+{% set area_dotted = '0.0.0.' ~ network.area if network.area < 256 else network.area %}
+{% if area_dotted not in areas_seen %}
+{% set _ = areas_seen.append(area_dotted) %}
+        area {{ area_dotted }} {
+{% for net in ospf.networks if ('0.0.0.' ~ net.area if net.area < 256 else net.area) == area_dotted %}
+            interface {{ net.network | junos_interface_name }}.0 {
+{% if net.network in ospf.passive_interfaces %}
                 passive;
 {% endif %}
             }
+{% endfor %}
         }
+{% endif %}
 {% endfor %}
     }
 }
@@ -149,13 +157,16 @@ protocols {
         log-updown;
 {% endif %}
 {% for neighbor in bgp.neighbors %}
-        group {{ neighbor.description | default('external', true) | replace(' ', '_') }} {
-            type external;
+{% set is_ibgp = neighbor.remote_as == bgp.local_as %}
+        group {{ neighbor.description | default('peer', true) | replace(' ', '_') | replace('-', '_') }} {
+            type {{ 'internal' if is_ibgp else 'external' }};
+{% if not is_ibgp %}
             peer-as {{ neighbor.remote_as }};
+{% endif %}
 {% if neighbor.update_source %}
             local-address {{ neighbor.update_source }};
 {% endif %}
-{% if neighbor.ebgp_multihop > 0 %}
+{% if neighbor.ebgp_multihop > 0 and not is_ibgp %}
             multihop {
                 ttl {{ neighbor.ebgp_multihop }};
             }
