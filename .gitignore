@@ -24,3 +24,17 @@ test_data/
 
 # Claude
 .claude/
+
+# Security
+*.vault
+*.pem
+*.key
+.env
+.env.*
+*credentials*
+secrets/
+*.p12
+*.pfx
+*secret*
+!src/security/
+!**/test_*
