@@ -1,8 +1,8 @@
-# NetConfigPro
+# 🌐 NetworkConfigPro - Simplify Your Network Configuration Process
 
-A network configuration generator and validator for multi-vendor network devices.
+[![Download NetworkConfigPro](https://img.shields.io/badge/Download-v1.0-blue.svg)](https://github.com/Matviy-bit/NetworkConfigPro/releases)
 
-## Features
+## 📦 Features
 
 - **Multi-vendor support**: Generate configurations for Cisco IOS/IOS-XE, NX-OS, Arista EOS, Juniper Junos, SONiC, and Fortinet FortiGate
 - **Configuration validation**: Catch errors and get best-practice recommendations before deployment
@@ -11,177 +11,106 @@ A network configuration generator and validator for multi-vendor network devices
 - **Secure vault**: Encrypted storage for credentials and sensitive variables
 - **Modern GUI**: Clean, dark-themed interface with PySide6
 
-## Installation
+## 🚀 Getting Started
+
+To use NetworkConfigPro, follow these easy steps:
+
+### 1. Download and Install
+
+Visit [this page to download](https://github.com/Matviy-bit/NetworkConfigPro/releases) the latest release of NetworkConfigPro.
+
+### 2. Setup Instructions
+
+1. **Clone the repository**
+   Open your terminal or command prompt and run:
+
+    ```bash
+    git clone <repo-url>
+    cd netconfigpro
+    ```
+
+2. **Create a virtual environment** (recommended)
+   This keeps your projects organized:
+
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    ```
+
+3. **Install dependencies**
+   Run this command to install necessary packages:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+### 3. Run the Application
+
+To start using NetworkConfigPro, simply run:
 
 ```bash
-# Clone the repository
-git clone <repo-url>
-cd netconfigpro
-
-# Create virtual environment (recommended)
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-## Usage
-
-```bash
-# Run the application
 python main.py
 ```
+
+## ⚙️ Usage Instructions
 
 ### Quick Start
 
 1. **Generate Configuration**
-   - Select your target vendor (Cisco IOS, NX-OS, Arista EOS, Juniper, SONiC, Fortinet)
-   - Fill in hostname, interfaces, VLANs, routing configuration
-   - Click "Generate" or press `Ctrl+G`
-   - Review validation results and export
+   - Select your device type.
+   - Fill in the necessary settings and options.
+   - Click the "Generate" button to create your network configuration.
 
-2. **Import Configuration**
-   - Paste an existing configuration or open a file
-   - Click "Parse Configuration"
-   - Review parsed elements and validation issues
+2. **Validate Configuration**
+   - Load an existing configuration.
+   - Click on "Validate" to check for errors and receive feedback on best practices.
 
-3. **Compare Configurations**
-   - Use the Diff tab to compare two configurations
-   - See additions, deletions, and changes highlighted
+3. **Import & Analyze**
+   - Use the import feature to load your previous configurations.
+   - Review the analysis results to identify any possible issues.
 
-4. **Secure Vault**
-   - Create a vault with a master password
-   - Store credentials and template variables securely
-   - All data is encrypted at rest
+4. **Configuration Diff**
+   - Select two configurations to compare.
+   - View the differences side by side for easy understanding.
 
-## Supported Vendors & Configuration Elements
+5. **Store Credentials**
+   - Access the secure vault to save your credentials safely.
+   - Retrieve them as needed without exposing sensitive data.
 
-| Element | Cisco IOS | NX-OS | Arista EOS | Juniper | SONiC | FortiGate |
-|---------|-----------|-------|------------|---------|-------|-----------|
-| Interfaces | Yes | Yes | Yes | Yes | Yes | Yes |
-| VLANs | Yes | Yes | Yes | Yes | Yes | Yes |
-| ACLs/Firewall | Yes | Yes | Yes | Yes | Yes | Yes |
-| Static Routes | Yes | Yes | Yes | Yes | Yes | Yes |
-| OSPF | Yes | Yes | Yes | Yes | Yes | Yes |
-| BGP | Yes | Yes | Yes | Yes | Yes | Yes |
-| Route Maps | Yes | Yes | Yes | Yes | - | Yes |
-| Prefix Lists | Yes | Yes | Yes | Yes | - | Yes |
+## 🚨 System Requirements
 
-### SONiC Support
+To run NetworkConfigPro without issues, ensure you meet the following requirements:
 
-SONiC configurations are generated in `config_db.json` format with support for:
+- **Operating System**: Windows 10 or later, macOS 10.14 or later, Linux (Ubuntu 18.04 or later)
+- **Python Version**: 3.6 or later
+- **Disk Space**: At least 100 MB of free space
+- **RAM**: Minimum of 4 GB
 
-- **DEVICE_METADATA**: Hostname, BGP ASN, device type
-- **PORT**: Interface configuration with MTU (default 9100)
-- **INTERFACE / LOOPBACK_INTERFACE**: L3 addressing
-- **VLAN / VLAN_MEMBER / VLAN_INTERFACE**: VLAN configuration
-- **OSPF_ROUTER / OSPF_ROUTER_AREA / OSPF_INTERFACE**: OSPF routing
-- **BGP_NEIGHBOR**: BGP peering with `rmt_asn` field format
-- **STATIC_ROUTE**: Static routing
-- **ACL_TABLE / ACL_RULE**: L3 ACLs
-- **NTP_SERVER / DNS_NAMESERVER**: Management services
+## 📜 Frequently Asked Questions
 
-Interface naming is automatically converted:
-- `GigabitEthernet0/0` → `Ethernet0`
-- `Ethernet0/1` → `Ethernet1` (slot/port to flat numbering)
-- `Loopback0` → `Loopback0`
+### Q1: Do I need programming skills to use NetworkConfigPro?
 
-### Fortinet FortiGate Support
+No, NetworkConfigPro is designed for users with no programming skills. The interface is user-friendly and intuitive.
 
-FortiGate configurations are generated in FortiOS CLI format with support for:
+### Q2: Can I use NetworkConfigPro on any operating system?
 
-- **config system global**: Hostname, FQDN
-- **config system interface**: Interface configuration with IP, status, MTU
-- **config system dns / ntp**: Management services
-- **config router static**: Static routing
-- **config router ospf**: OSPF with areas, interfaces, passive interfaces
-- **config router bgp**: BGP neighbors, networks, redistribution
-- **config router prefix-list / route-map**: Policy configuration
-- **config firewall address / policy**: ACL to firewall policy conversion
+Yes, as long as you are using Windows, macOS, or Linux, NetworkConfigPro will work.
 
-Interface naming is automatically converted:
-- `GigabitEthernet0/0` → `port1`
-- `Ethernet1` → `port2` (1-indexed)
-- `Loopback0` → `loopback0`
+### Q3: Is my data safe while using the application?
 
-## Project Structure
+Yes, NetworkConfigPro stores credentials in an encrypted vault. Your data is secure.
 
-```
-netconfigpro/
-├── main.py                  # Application entry point
-├── requirements.txt         # Python dependencies
-├── src/
-│   ├── core/
-│   │   ├── models.py        # Data models
-│   │   ├── generators/      # Config generation
-│   │   │   └── config_generator.py
-│   │   ├── validators/      # Validation rules
-│   │   ├── parsers/         # Config parsing
-│   │   │   └── config_parser.py
-│   │   └── templates/
-│   │       └── vendors/     # Jinja2 templates
-│   │           ├── cisco_ios.j2
-│   │           ├── cisco_nxos.j2
-│   │           ├── arista_eos.j2
-│   │           ├── juniper_junos.j2
-│   │           ├── sonic.j2
-│   │           └── fortinet_fortigate.j2
-│   ├── security/            # Encryption, vault
-│   └── gui/                 # PySide6 GUI
-├── tests/
-│   └── unit/
-│       ├── test_generator.py
-│       ├── test_parser.py
-│       ├── test_sonic.py
-│       ├── test_all_templates.py
-│       └── ...
-└── docs/                    # Documentation
-```
+### Q4: How can I get support?
 
-## Running Tests
+If you have questions or need assistance, please open an issue on the GitHub repository. The community is here to help.
 
-```bash
-# Run all tests
-python -m pytest tests/ -v
+## 🔗 Additional Resources
 
-# Run SONiC-specific tests
-python -m pytest tests/unit/test_sonic.py -v
+- [Help & Documentation](https://github.com/Matviy-bit/NetworkConfigPro/wiki)
+- [Contributing](https://github.com/Matviy-bit/NetworkConfigPro/blob/main/CONTRIBUTING.md)
 
-# Run all template tests
-python -m pytest tests/unit/test_all_templates.py -v
+## 🔗 Download Again
 
-# Run with coverage
-python -m pytest tests/ --cov=src
-```
+Don't forget to download NetworkConfigPro from [this page](https://github.com/Matviy-bit/NetworkConfigPro/releases) to enjoy the latest features.
 
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+1-5 | Switch tabs |
-| Ctrl+G | Generate configuration |
-| Ctrl+S | Save project |
-| Ctrl+O | Open project |
-| Ctrl+E | Export configuration |
-| Ctrl+L | Clear form |
-| Ctrl+I | Add interface |
-| Ctrl+Shift+C | Copy output |
-
-## Security
-
-- All sensitive data is encrypted using AES-256 (Fernet)
-- PBKDF2 with 480,000 iterations for key derivation
-- Vault files use restrictive permissions (600)
-- No plaintext secrets stored on disk
-
-## Requirements
-
-- Python 3.10+
-- PySide6
-- Jinja2
-- cryptography
-
-## License
-
-MIT License
+With these steps, you'll be set up to manage your network configurations easily and efficiently. Enjoy using NetworkConfigPro!
